@@ -1,0 +1,374 @@
+{
+  "name": "Security Alert Collection",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "security-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6c32799e-8f5b-4ea5-9f6d-94023b498ae7",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        80
+      ],
+      "webhookId": "security-alert-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-source",
+              "name": "source",
+              "value": "={{ $json.body.source }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-alert-type",
+              "name": "alert_type",
+              "value": "={{ $json.body.alert_type }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-severity",
+              "name": "severity",
+              "value": "={{ $json.body.severity }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-payload",
+              "name": "payload",
+              "value": "={{ $json.body.payload }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "82857a90-31cd-4182-924d-5aa5e0dd9997",
+      "name": "Normalize Alert Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -448,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-source",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-alert-type",
+              "leftValue": "={{ $json.alert_type }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "37f5b66c-3538-46ed-8359-350a6fc21105",
+      "name": "Validate Required Fields",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst pad = (n) => n.toString().padStart(2, '0');\nconst datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;\nconst timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;\nconst incidentId = `INC-${datePart}-${timePart}`;\n\nreturn items.map(item => {\n  item.json.incident_id = incidentId;\n  return item;\n});"
+      },
+      "id": "4c094383-82f9-4cf6-accf-19437e7112d8",
+      "name": "Generate Incident ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-created-at",
+              "name": "created_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "5c958177-bbb6-4a18-bd32-ad104e8a6057",
+      "name": "Add Timestamp",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "alerts",
+          "mode": "list",
+          "cachedResultName": "alerts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "incident_id": "={{$json.incident_id}}",
+            "source": "={{$json.source}}",
+            "alert_type": "={{$json.alert_type}}",
+            "severity": "={{$json.severity}}",
+            "payload": "={{ JSON.stringify($json.payload) }}",
+            "created_at": "={{$json.created_at}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "alert_id",
+              "displayName": "alert_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "alert_type",
+              "displayName": "alert_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1abb50f9-9b64-4a48-a4d8-873fb65ff601",
+      "name": "Insert into PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        448,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "fkvUbaGWMIhoP81T",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"received\", incident_id: $json.incident_id } }}",
+        "options": {}
+      },
+      "id": "712e1dc3-d47b-480c-9329-a61dd8a7e91d",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"error\", message: \"Missing required fields: source or alert_type\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "b3f45074-3e33-4a7f-8b75-de6b85c18f9f",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Alert Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Alert Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Required Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Required Fields": {
+      "main": [
+        [
+          {
+            "node": "Generate Incident ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Incident ID": {
+      "main": [
+        [
+          {
+            "node": "Add Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Insert into PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert into PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3ac5a24a-473a-4a76-bbf3-01c60b41c738",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a8a032fe4eb1f8e334a2307051ba7b19bf15b3dd2b80c0a406082cee4785d17f"
+  },
+  "id": "1RfnLWZ1LxTGW3Gx",
+  "tags": []
+}
