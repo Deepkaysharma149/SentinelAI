@@ -1,0 +1,267 @@
+{
+  "name": "Workflow 3 - Incident Assignment & Escalation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "57aa142e-9eed-4a29-9fd8-da43d8ac8d4b",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM alerts\nORDER BY alert_id DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "id": "f1a384ad-6857-4946-a8a9-65863a46513d",
+      "name": "Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -448,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "fkvUbaGWMIhoP81T",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "530cb61a-dac9-4a10-8775-af4dae2f4dad",
+              "leftValue": "={{$json.priority}}",
+              "rightValue": "High",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ad28d9fa-20b2-4bde-87a0-f9289b608884",
+      "name": "IF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "deepkaysharma149@gmail.com",
+        "subject": "=🚨 SentinelAI Security Alert - {{$json.incident_id}}",
+        "message": "=<h2>🚨 SentinelAI Security Alert</h2>  <p><b>Incident ID:</b> {{$json.incident_id}}</p> <p><b>Severity:</b> {{$json.severity}}</p> <p><b>Threat Category:</b> {{$json.threat_category}}</p> <p><b>Priority:</b> {{$json.priority}}</p> <p><b>Risk Score:</b> {{$json.risk_score}}</p>  <h3>AI Recommendation</h3> <p>{{$json.ai_recommendation}}</p>  <hr>  <p><b>Source:</b> {{$json.source}}</p> <p><b>Alert Type:</b> {{$json.alert_type}}</p> <p><b>Time:</b> {{$json.created_at}}</p>",
+        "options": {}
+      },
+      "id": "14334095-49ab-4bf4-b89a-8231c2b07f3f",
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7b2662f8-6faa-4d4d-a215-8fec6a598957",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "W5pdAKxcTgKzsHlG",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "audit_logs",
+          "mode": "list",
+          "cachedResultName": "audit_logs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "incident_id": "={{$node[\"IF\"].json[\"incident_id\"]}}",
+            "action": "\"Email Sent\"",
+            "created_at": "2026-07-27T01:26:14"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "action",
+              "displayName": "action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6086752c-7abe-4585-bf9f-fcb1330748ec",
+      "name": "Postgres (Insert Audit Log)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        448,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "fkvUbaGWMIhoP81T",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE alerts\nSET status = 'Email Sent'\nWHERE incident_id = '{{$node[\"IF\"].json[\"incident_id\"]}}';",
+        "options": {}
+      },
+      "id": "2659ec13-0248-44cf-a2d5-cb388c27c9cd",
+      "name": "Postgres (Update Incident Status)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "fkvUbaGWMIhoP81T",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail": {
+      "main": [
+        [
+          {
+            "node": "Postgres (Update Incident Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres (Update Incident Status)": {
+      "main": [
+        [
+          {
+            "node": "Postgres (Insert Audit Log)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5bfbdc24-5512-4137-8821-11e9bd72d033",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a8a032fe4eb1f8e334a2307051ba7b19bf15b3dd2b80c0a406082cee4785d17f"
+  },
+  "id": "EUPcmmX46AVthDoB",
+  "tags": []
+}
