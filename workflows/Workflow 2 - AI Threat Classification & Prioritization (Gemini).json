@@ -1,0 +1,363 @@
+{
+  "name": "Workflow 2 - AI Threat Classification & Prioritization (Gemini)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "6c426ed6-e2aa-45f1-9596-cc2f356a13ad",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM alerts\nORDER BY alert_id DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "id": "c8cbbd6f-0fe4-40c1-add2-306f350984d6",
+      "name": "Postgres - Get Latest Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "fkvUbaGWMIhoP81T",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1a1a111-0003-4a11-8a11-000000000003",
+              "name": "alert_id",
+              "value": "={{ $json.alert_id }}",
+              "type": "number"
+            },
+            {
+              "id": "d1a1a111-0004-4a11-8a11-000000000004",
+              "name": "incident_id",
+              "value": "={{ $json.incident_id }}",
+              "type": "string"
+            },
+            {
+              "id": "d1a1a111-0005-4a11-8a11-000000000005",
+              "name": "prompt_text",
+              "value": "=You are a Cyber Security SOC Analyst.\nAnalyze the following security alert.\nReturn ONLY valid JSON, no markdown, no extra text.\n\nIncident ID: {{ $json.incident_id }}\nSource: {{ $json.source }}\nAlert Type: {{ $json.alert_type }}\nSeverity: {{ $json.severity }}\nPayload: {{ JSON.stringify($json.payload) }}\n\nOutput format:\n{\n  \"threat_category\": \"\",\n  \"priority\": \"\",\n  \"risk_score\": 0,\n  \"ai_recommendation\": \"\",\n  \"ai_analysis\": \"\"\n}\n\nRules:\nPriority must be one of: Critical, High, Medium, Low.\nRisk Score must be an integer between 0 and 100.\nRecommendation should be actionable.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bfb6bda0-6510-4a02-8269-c2b8420d65a6",
+      "name": "Set - Prepare Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": []
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"contents\": [\n    {\n      \"parts\": [\n        { \"text\": $json.prompt_text }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"temperature\": 0.2\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "5811bd72-cefc-4889-babb-b53f6fb998b6",
+      "name": "HTTP Request - Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "4n2HmzDa29qiwv4a",
+          "name": "Query Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const alertItem = $('Set - Prepare Prompt').item.json;\n\nlet rawText = '';\ntry {\n  rawText = $json.candidates[0].content.parts[0].text;\n} catch (e) {\n  throw new Error('Unexpected Gemini response structure: ' + JSON.stringify($json));\n}\n\nrawText = (rawText || '').trim();\n\n// Strip markdown code fences if present\nconst fenceMatch = rawText.match(/```(?:json)?([\\s\\S]*?)```/i);\nif (fenceMatch) {\n  rawText = fenceMatch[1].trim();\n}\n\n// Extract the first JSON object found in the text\nconst jsonMatch = rawText.match(/\\{[\\s\\S]*\\}/);\nconst jsonString = jsonMatch ? jsonMatch[0] : rawText;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(jsonString);\n} catch (e) {\n  throw new Error('Failed to parse AI JSON response: ' + e.message + ' | Raw: ' + rawText);\n}\n\nconst allowedPriorities = ['Critical', 'High', 'Medium', 'Low'];\nconst priority = allowedPriorities.includes(parsed.priority) ? parsed.priority : 'Low';\n\nlet riskScore = Number(parsed.risk_score);\nif (isNaN(riskScore)) riskScore = 0;\nriskScore = Math.max(0, Math.min(100, riskScore));\n\nreturn [\n  {\n    json: {\n      alert_id: alertItem.alert_id,\n      incident_id: alertItem.incident_id,\n      threat_category: parsed.threat_category || 'Unknown',\n      priority: priority,\n      risk_score: riskScore,\n      ai_recommendation: parsed.ai_recommendation || '',\n      ai_analysis: parsed.ai_analysis || ''\n    }\n  }\n];"
+      },
+      "id": "1c39e867-7ba1-4007-8a63-f2c71f596913",
+      "name": "Code - Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "alerts",
+          "mode": "list",
+          "cachedResultName": "alerts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "incident_id": "={{$json.incident_id}}",
+            "alert_id": "={{$json.alert_id}}",
+            "risk_score": "={{$json.risk_score}}",
+            "threat_category": "={{$json.threat_category}}",
+            "priority": "={{$json.priority}}",
+            "ai_recommendation": "={{$json.ai_recommendation}}",
+            "ai_analysis": "={{$json.ai_analysis}}"
+          },
+          "matchingColumns": [
+            "alert_id"
+          ],
+          "schema": [
+            {
+              "id": "alert_id",
+              "displayName": "alert_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "alert_type",
+              "displayName": "alert_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "threat_category",
+              "displayName": "threat_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "risk_score",
+              "displayName": "risk_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_recommendation",
+              "displayName": "ai_recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_analysis",
+              "displayName": "ai_analysis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "27164aeb-4cca-476d-b44d-5ca3b4a0015a",
+      "name": "Postgres - Update Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1104,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "fkvUbaGWMIhoP81T",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Get Latest Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Get Latest Alert": {
+      "main": [
+        [
+          {
+            "node": "Set - Prepare Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Prepare Prompt": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Gemini": {
+      "main": [
+        [
+          {
+            "node": "Code - Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Update Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "165a1462-5539-44d1-837e-3c6c2c70b0c9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a8a032fe4eb1f8e334a2307051ba7b19bf15b3dd2b80c0a406082cee4785d17f"
+  },
+  "id": "kAmtohflWG95uGux",
+  "tags": []
+}
